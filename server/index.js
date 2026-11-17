@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { normalizeMessage, validateAnswer } from './mail.js';
 import { getConfig } from './config.js';
+import { oauthFailureCode, providerError } from './oauth-errors.js';
 const app = express();
 const { port, origin, base, callback } = getConfig();
 const configured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -30,7 +31,10 @@ function newSession(res) {
 }
 async function jsonFetch(url, options) {
   const response = await fetch(url,{...options,signal:AbortSignal.timeout(45000)});
-  if (!response.ok) { const error = new Error('External service request failed'); error.status=response.status; throw error; }
+  if (!response.ok) {
+    const body = await response.json().catch(()=>null);
+    throw providerError(response.status, body);
+  }
   return response.json();
 }
 app.get('/api/health',(_req,res)=>res.json({ok:true}));
@@ -44,16 +48,25 @@ app.get('/api/auth/google',(req,res)=>{
 app.get('/api/auth/google/callback',async(req,res)=>{
   const s = req.session;
   const state = typeof req.query.state === 'string' ? req.query.state : '';
-  if (!s || state.length !== s.csrf.length || !timingSafeEqual(Buffer.from(state),Buffer.from(s.csrf))) return res.status(400).send('Invalid or expired sign-in. Please connect again.');
+  if (!s || Buffer.byteLength(state) !== Buffer.byteLength(s.csrf) || !timingSafeEqual(Buffer.from(state),Buffer.from(s.csrf))) return res.status(400).send('Invalid or expired sign-in. Please connect again.');
   s.csrf = randomBytes(24).toString('hex');
   if (req.query.error || typeof req.query.code !== 'string') return res.redirect(`${origin}/?auth=cancelled`);
+  let stage = 'token';
   try {
     const token = await jsonFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({code:req.query.code,client_id:process.env.GOOGLE_CLIENT_ID,client_secret:process.env.GOOGLE_CLIENT_SECRET,redirect_uri:callback,grant_type:'authorization_code'})});
-    s.token=token.access_token; s.tokenExpires=Date.now()+token.expires_in*1000;
-    const profile=await jsonFetch('https://gmail.googleapis.com/gmail/v1/users/me/profile',{headers:{Authorization:`Bearer ${s.token}`}});
+    if (typeof token.access_token !== 'string' || !token.access_token) throw new Error('Missing access token');
+    stage = 'profile';
+    const profile=await jsonFetch('https://gmail.googleapis.com/gmail/v1/users/me/profile',{headers:{Authorization:`Bearer ${token.access_token}`}});
+    if (typeof profile.emailAddress !== 'string' || !profile.emailAddress) throw new Error('Missing Gmail profile');
+    s.token=token.access_token; s.tokenExpires=Date.now()+Number(token.expires_in || 3600)*1000;
     s.email=profile.emailAddress;
     res.redirect(origin);
-  } catch { s.token=null; res.redirect(`${origin}/?auth=failed`); }
+  } catch (error) {
+    s.token=null; s.email=null;
+    const reason = oauthFailureCode(stage, error);
+    console.warn(`[Google OAuth] stage=${stage} reason=${reason} status=${Number(error.status)||0}`);
+    res.redirect(`${origin}/?auth=${reason}`);
+  }
 });
 app.post('/api/disconnect',async(req,res)=>{
   if(req.session?.token) { try { await fetch('https://oauth2.googleapis.com/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:req.session.token}),signal:AbortSignal.timeout(10000)}); } catch {} }

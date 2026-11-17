@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowDownLeft, ArrowUp, AudioLines, Check, ChevronRight, CircleHelp, ExternalLink, Inbox, Mail, Mic, Plus, Settings2, ShieldCheck, Sparkles, Square, Volume2, VolumeX, X } from 'lucide-react';
 import { demoAnswer } from './demo';
+import { authMessage } from './auth';
 import { listen, speak, stopSpeaking } from './voice';
 import './style.css';
 type Source={id:string;subject:string;from:string;date:string;url?:string};
@@ -17,7 +18,7 @@ function App(){
  const [settings,setSettings]=useState(false); const [source,setSource]=useState<Source|null>(null);
  const stopRef=useRef<()=>void>(()=>{}); const endRef=useRef<HTMLDivElement>(null);
  async function refresh(){try{const r=await fetch('/api/status');if(!r.ok)throw Error();const s=await r.json();setStatus(s);if(s.connected)setMode('live');}catch{setError('The server is unavailable. Demo mode is still available.');}}
- useEffect(()=>{void refresh();const auth=new URLSearchParams(location.search).get('auth');if(auth)setError(auth==='cancelled'?'Gmail sign-in was cancelled.':'Gmail connection failed. Check the server configuration and try again.');return ()=>{stopRef.current();void stopSpeaking();};},[]);
+ useEffect(()=>{void refresh();const auth=new URLSearchParams(location.search).get('auth');if(auth){setError(authMessage(auth));const url=new URL(location.href);url.searchParams.delete('auth');history.replaceState(null,'',url.pathname+url.search+url.hash);}return ()=>{stopRef.current();void stopSpeaking();};},[]);
  useEffect(()=>{endRef.current?.scrollIntoView({behavior:'smooth'});},[messages,busy]);
  async function ask(text=input){
   text=text.trim();if(!text||busy)return;stopRef.current();setListening(false);void stopSpeaking();setError('');setInput('');setMessages(m=>[...m,{role:'user',text}]);setBusy(true);
