@@ -43,3 +43,17 @@ Each question is independent; follow-up context is not yet supported. Search is 
 Tokens and session state are stored only in server memory, expire after at most eight hours, and are lost on restart. Google access tokens are not refreshed; reconnect when they expire. Session cookies are HttpOnly, SameSite=Lax, and Secure on HTTPS. Mutation requests validate their Origin. API responses are not cached. Disconnect attempts Google token revocation and always deletes the local session.
 
 Before a public launch: durable encrypted session storage, per-user quotas and abuse protection, account/data deletion policies, Google verification, production OAuth flow for iOS, device testing, and privacy disclosures. Set APP_ORIGIN, PUBLIC_BASE_URL, and GOOGLE_REDIRECT_URI to your HTTPS deployment; allow only the intended host. No email content or credentials are logged by this application.
+
+## Deploy to Render
+
+[Deploy to Render](https://render.com/deploy?repo=https://github.com/janhabuildings/Agent)
+
+1. Sign in to Render, open the link above, and authorize access to `janhabuildings/Agent` if requested. Alternatively choose **New → Blueprint** in Render and select this repository.
+2. Review the `agent` web service from `render.yaml` and deploy. The Blueprint selects the Free plan. Render can change plan availability; confirm the displayed plan before creating it.
+3. Open the HTTPS `onrender.com` URL Render assigns after the build and health check pass. The fictional demo works immediately without any API keys.
+4. For live Gmail, add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `OPENAI_API_KEY` to the service's private **Environment** settings. Register `https://YOUR-SERVICE.onrender.com/api/auth/google/callback` as an authorized redirect URI in the Google OAuth web client, and add your Gmail address as a test user on the OAuth consent screen.
+5. Save and redeploy, then use **Connect Gmail** in the app. Never put secret values in `render.yaml` or commit `.env`.
+
+The server reads Render's `PORT` and binds to `0.0.0.0`. `RENDER_EXTERNAL_URL` supplies the HTTPS origin and OAuth callback automatically. For a custom domain, set both `APP_ORIGIN` and `PUBLIC_BASE_URL` to its HTTPS origin, and update the Google redirect URI. `/api/health` is the deployment health check; `/api/status` reports connection readiness without exposing credentials.
+
+Free services can sleep when idle, so the first request may be slow. A restart, redeploy, or idle shutdown loses the in-memory Gmail session and requires reconnecting. Use one instance until shared session storage is implemented.

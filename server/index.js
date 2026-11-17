@@ -2,11 +2,9 @@ import express from 'express';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { normalizeMessage, validateAnswer } from './mail.js';
+import { getConfig } from './config.js';
 const app = express();
-const port = Number(process.env.PORT || 3001);
-const origin = process.env.APP_ORIGIN || 'http://localhost:5173';
-const base = process.env.PUBLIC_BASE_URL || `http://localhost:${port}`;
-const callback = process.env.GOOGLE_REDIRECT_URI || `${base}/api/auth/google/callback`;
+const { port, origin, base, callback } = getConfig();
 const configured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 const sessions = new Map(); // Deliberately ephemeral. Restarting signs everyone out.
 app.disable('x-powered-by');
@@ -35,6 +33,7 @@ async function jsonFetch(url, options) {
   if (!response.ok) { const error = new Error('External service request failed'); error.status=response.status; throw error; }
   return response.json();
 }
+app.get('/api/health',(_req,res)=>res.json({ok:true}));
 app.get('/api/status',(req,res)=>res.json({connected:Boolean(req.session?.token),configured,aiConfigured:Boolean(process.env.OPENAI_API_KEY),email:req.session?.email||null}));
 app.get('/api/auth/google',(req,res)=>{
   if (!configured) return res.status(503).send('Google OAuth is not configured. See README.md.');
