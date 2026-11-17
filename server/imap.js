@@ -19,11 +19,11 @@ export async function verifyImap(credentials, createClient) {
 export function imapCriteria(query, now=new Date()) {
   return query ? {text:query} : {since:new Date(now.getTime()-30*24*60*60*1000)};
 }
-export async function readImapMessages(credentials, query, createClient) {
+export async function readImapMessages(credentials, query, createClient, {latestOnly=false}={}) {
   return withInbox(credentials,async client=>{
-    const uids=await client.search(imapCriteria(query),{uid:true});
+    const uids=await client.search(latestOnly?{all:true}:imapCriteria(query),{uid:true});
     if(!Array.isArray(uids)||!uids.length)return [];
-    const selected=uids.slice(-20).reverse();
+    const selected=uids.sort((a,b)=>a-b).slice(latestOnly?-1:-20).reverse();
     const messages=[];
     // PEEK source fetches and EXAMINE read-only mode preserve unread flags.
     for await (const message of client.fetch(selected.join(','),{uid:true,source:{start:0,maxLength:200000}},{uid:true})) {
@@ -31,7 +31,7 @@ export async function readImapMessages(credentials, query, createClient) {
       const body=(mail.text||'').slice(0,10000);
       messages.push({id:`imap-${message.uid}`,subject:mail.subject||'(No subject)',from:mail.from?.text||'',date:mail.date?.toISOString()||'',body,excerpt:body.slice(0,1200)});
     }
-    return messages.reverse();
+    return messages.sort((a,b)=>Number(b.id.slice(5))-Number(a.id.slice(5)));
   },createClient);
 }
 export function imapErrorMessage(error) {

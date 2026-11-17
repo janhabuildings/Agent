@@ -26,3 +26,7 @@ test('retrieval limits to 20 messages, bounds bytes, parses MIME, and preserves 
 test('blank search covers the last 30 days; a phrase is passed as literal IMAP text',()=>{
  assert.deepEqual(imapCriteria('drawings'),{text:'drawings'});assert.equal(imapCriteria('',new Date('2026-11-17T00:00:00Z')).since.toISOString(),'2026-10-18T00:00:00.000Z');
 });
+test('latest mode searches the entire inbox rather than a 30-day window and fetches one message',async()=>{
+ const {client,calls}=mockClient();await readImapMessages({},'',()=>client,{latestOnly:true});
+ assert.deepEqual(calls.find(c=>c.criteria).criteria,{all:true});assert.equal(calls.find(c=>c.ids).ids,'25');
+});
