@@ -57,3 +57,15 @@ Before a public launch: durable encrypted session storage, per-user quotas and a
 The server reads Render's `PORT` and binds to `0.0.0.0`. `RENDER_EXTERNAL_URL` supplies the HTTPS origin and OAuth callback automatically. For a custom domain, set both `APP_ORIGIN` and `PUBLIC_BASE_URL` to its HTTPS origin, and update the Google redirect URI. `/api/health` is the deployment health check; `/api/status` reports connection readiness without exposing credentials.
 
 Free services can sleep when idle, so the first request may be slow. A restart, redeploy, or idle shutdown loses the in-memory Gmail session and requires reconnecting. Use one instance until shared session storage is implemented.
+
+## Connect Hostinger email
+
+The app now supports Hostinger mailboxes such as `you@yourcompany.com`, without Google OAuth setup.
+
+1. Open **Connect email → Connect Hostinger email**.
+2. Enter your full email address and mailbox password in the HTTPS app. Use a provider-issued app password if your account requires one. Do not share the password in chat or commit it to the repo.
+3. After connecting, ask a question in the main chat. `OPENAI_API_KEY` must still be configured in Render for live answers.
+
+The server connects only to `imap.hostinger.com:993` with verified TLS. Login checks the inbox; mailbox credentials stay only in the current server session in memory for at most eight hours. Credentials are not sent to OpenAI, written to application storage, or returned to the client. Disconnect, session expiration, or a server restart removes them. A restart during a request may interrupt an answer. IMAP itself uses your account's credentials, so those credentials can have broader capabilities than Agent; Agent opens the mailbox read-only and has no send/delete operations.
+
+Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase, or the most recent messages from the last 30 days for broad questions. Each answer reads at most 20 messages and 200 KB of raw source per message; long emails may be truncated. Source cards show an excerpt rather than a Gmail link. Attachments are not analyzed. Gmail search operators do not apply to Hostinger. Voice questions follow the same search limits. The host must permit outbound TLS connections on TCP port 993; a firewall or hosting restriction can prevent login. Sign-in attempts are limited to five per IP per 15 minutes.
