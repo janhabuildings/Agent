@@ -1,4 +1,5 @@
 import {Pool} from 'pg';
+import {databaseConnectionString} from './diagnostics.js';
 import {randomUUID,createHash} from 'node:crypto';
 import {scheduleKey,seal,unseal,ownerKey} from './crypto.js';
 import {nextRun,sessionIdentities} from './plan.js';
@@ -15,9 +16,9 @@ CREATE TABLE IF NOT EXISTS agent_scheduler_heartbeat (id integer PRIMARY KEY CHE
 `;
 export function schedulingConfigured(env=process.env){try{return Boolean(env.DATABASE_URL&&scheduleKey(env.SCHEDULE_ENCRYPTION_KEY));}catch{return false;}}
 export class ScheduleStore{
- constructor({pool,key}={}){this.pool=pool||new Pool({connectionString:process.env.DATABASE_URL,max:4,connectionTimeoutMillis:10000});this.key=key||scheduleKey();this.ready=null;}
+ constructor({pool,key}={}){this.pool=pool||new Pool({connectionString:databaseConnectionString(process.env.DATABASE_URL),max:4,connectionTimeoutMillis:10000});this.key=key||scheduleKey();this.ready=null;}
  async init(){
-  this.ready ||= (async()=>{const client=await this.pool.connect();try{await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(178903,0)');await client.query(schema);const keyId=createHash('sha256').update(this.key).digest('hex');await client.query('INSERT INTO agent_schedule_config(id,key_id) VALUES(1,$1) ON CONFLICT(id) DO NOTHING',[keyId]);const saved=await client.query('SELECT key_id FROM agent_schedule_config WHERE id=1');if(saved.rows[0].key_id!==keyId)throw userError('The scheduling encryption key does not match this database. Restore the original SCHEDULE_ENCRYPTION_KEY on both web and worker.');await client.query('COMMIT');}catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}})().catch(error=>{this.ready=null;throw error;});await this.ready;
+  this.ready ||= (async()=>{const client=await this.pool.connect();try{await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(178903,0)');await client.query(schema);const keyId=createHash('sha256').update(this.key).digest('hex');await client.query('INSERT INTO agent_schedule_config(id,key_id) VALUES(1,$1) ON CONFLICT(id) DO NOTHING',[keyId]);const saved=await client.query('SELECT key_id FROM agent_schedule_config WHERE id=1');if(saved.rows[0].key_id!==keyId)throw userError('The scheduling encryption key does not match this database. Restore the original SCHEDULE_ENCRYPTION_KEY on both web and worker.');await client.query('COMMIT');}catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}})().catch(error=>{this.ready=null;error.scheduleStage ||= 'database_init';throw error;});await this.ready;
  }
  owners(session){return sessionIdentities(session).map(id=>ownerKey(id,this.key));}
  primaryOwner(session,plan){const identity=plan.sources.includes('crm')?'crm:'+session.crm?.userId:'email:'+session.email?.toLowerCase();if(identity.endsWith('undefined'))throw Error('Reconnect the required data source.');return ownerKey(identity,this.key);}

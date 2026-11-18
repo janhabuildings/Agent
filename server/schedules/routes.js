@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {schedulerDiagnostic} from './diagnostics.js';
 import {ScheduleStore,schedulingConfigured} from './store.js';
 import {interpretSchedule,validateSchedule,connectionsForPlan,sessionIdentities,availableSources} from './plan.js';
 import {aiText} from './runner.js';
@@ -13,7 +14,7 @@ export function mountScheduleRoutes(app,{storeProvider=configuredStore,ai=aiText
  const draft=(session,plan)=>{session.scheduleDrafts ||= new Map();for(const [id,item] of session.scheduleDrafts)if(Date.now()>item.expires)session.scheduleDrafts.delete(id);while(session.scheduleDrafts.size>=5)session.scheduleDrafts.delete(session.scheduleDrafts.keys().next().value);const id=randomUUID();session.scheduleDrafts.set(id,{plan,expires:Date.now()+30*60000});return {draftId:id,plan};};
  const readDraft=(session,id)=>{const value=session.scheduleDrafts?.get(id);if(!value||Date.now()>value.expires)fail('This task preview expired. Preview the task again before saving.');return value.plan;};
  const checked=(value)=>{try{return validateSchedule(value);}catch(error){fail(error.message);}};
- app.get('/api/schedules/status',wrap(async(req,res)=>{const value=storeProvider();if(!value)return res.json({configured:false,workerActive:false,availableSources:availableSources(req.session),delivery:'in_app'});try{await value.init();const seen=await value.heartbeat();res.json({configured:true,workerActive:Boolean(seen&&Date.now()-new Date(seen).getTime()<5*60000),lastWorkerSeen:seen,availableSources:availableSources(req.session),delivery:'in_app'});}catch(error){res.status(503).json({configured:false,workerActive:false,error:error.schedulePublic||'The scheduling database could not be reached.'});}}));
+ app.get('/api/schedules/status',wrap(async(req,res)=>{const value=storeProvider();if(!value)return res.json({configured:false,workerActive:false,availableSources:availableSources(req.session),delivery:'in_app'});try{await value.init();const seen=await value.heartbeat();res.json({configured:true,workerActive:Boolean(seen&&Date.now()-new Date(seen).getTime()<5*60000),lastWorkerSeen:seen,availableSources:availableSources(req.session),delivery:'in_app'});}catch(error){res.status(503).json({configured:false,workerActive:false,error:schedulerDiagnostic(error).message,code:schedulerDiagnostic(error).code});}}));
  app.get('/api/schedules',auth,wrap(async(req,res)=>res.json({schedules:await store().list(req.session)})));
  app.post('/api/schedules/preview',auth,wrap(async(req,res)=>{
   if(req.body?.draftId){

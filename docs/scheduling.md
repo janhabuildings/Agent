@@ -49,3 +49,9 @@ The worker leases due jobs and stores one logical run per schedule/due time. An 
 ## Verification
 
 `npm test` includes encryption/tampering tests, timezone/DST tests, free-text interpretation and unsupported-task tests, account isolation, HTTP consent/draft ownership, and background report tests with mocked email/CRM/AI. Embedded PostgreSQL tests exercise the actual schema, saved grants, leases, manual paused runs, interrupted-run recovery, run history and revocation. A production Render database and live scheduled execution still require deployment verification.
+
+## Diagnose a failed Render Cron run
+
+The message `.env not found. Continuing without it.` is normal on Render: service environment variables are used instead of a committed `.env` file.
+
+The worker logs a safe JSON diagnostic such as `database_auth_failed`, `database_hostname_unresolved`, `database_permission_denied`, or `encryption_key_mismatch`, plus the stage of the failure. It never logs raw database error objects, connection URLs, credentials or provider responses. Share that diagnostic code/stage to troubleshoot. A key mismatch requires restoring the original key, not generating a replacement or clearing database tables.
