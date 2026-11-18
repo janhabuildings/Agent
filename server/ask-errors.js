@@ -1,5 +1,7 @@
 export function askFailure(error) {
   if (error.service === 'openai') {
+    if(['account_deactivated','organization_deactivated'].includes(error.providerCode)) return {status:502,code:'openai_account_disabled',error:'OpenAI reports that this API account or organization is deactivated. Check its status with OpenAI support.'};
+    if(['invalid_organization','invalid_project','mismatched_project'].includes(error.providerCode)) return {status:502,code:'openai_project_invalid',error:'OpenAI rejected the project or organization associated with this key. Check which API project owns the key and whether that project is active.'};
     if(error.status===401) return {status:502,code:'openai_auth_failed',error:'OpenAI rejected the API key currently loaded by this server. Check that Render has the complete API key without quotes, spaces, or a Bearer prefix, then save and deploy. Your email connection succeeded.'};
     if(error.providerCode==='insufficient_quota') return {status:502,code:'openai_quota_exhausted',error:'OpenAI reports no available API quota. Check billing and project limits in your OpenAI API account. Your email connection is working.'};
     if(error.status===429) return {status:429,code:'openai_rate_limited',error:'OpenAI is rate-limiting requests. Wait a moment and retry, or check your project rate limits.'};

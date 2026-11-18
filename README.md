@@ -73,3 +73,7 @@ Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase
 ### Latest email without AI
 
 For Hostinger, simple requests such as **“What is my last email?”** or **“Read my latest email”** read the newest arrival in INBOX directly, without an OpenAI request or API key. Leave the search scope blank for this shortcut. It reads one message (up to the same size limits), even if the inbox's newest email is older than 30 days. Analytical or filtered questions still use OpenAI. AI failures now identify authentication, API quota, rate limiting, and model-access errors separately from mailbox failures; only fixed error codes are logged.
+
+### Diagnose the deployed AI connection
+
+After signing into email, open **Manage connection → Test AI connection**. This sends one tiny test prompt to the configured model and does not send email data. The result shows a fixed provider error code, upstream HTTP status, the deployment revision, and a SHA-256 key fingerprint. It never returns the key or raw provider messages. A changed fingerprint confirms a different key was loaded after redeployment. Checks are limited to one per session per 30 seconds. An API key's presence alone does not confirm it is valid or usable by the configured model.

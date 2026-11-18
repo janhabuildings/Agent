@@ -16,7 +16,7 @@ export function providerError(status, body) {
   const error = new Error('External service request failed');
   error.status = status;
   const code = typeof body?.error === 'string' ? body.error : body?.error?.code || body?.error?.type || '';
-  error.providerCode = ['invalid_client','invalid_grant','redirect_uri_mismatch','invalid_api_key','insufficient_quota','model_not_found'].includes(code) ? code : undefined;
+  error.providerCode = ['invalid_client','invalid_grant','redirect_uri_mismatch','invalid_api_key','insufficient_quota','model_not_found','account_deactivated','organization_deactivated','invalid_organization','invalid_project','mismatched_project'].includes(code) ? code : undefined;
   const candidates = [...(Array.isArray(body?.error?.errors) ? body.error.errors : []), ...(Array.isArray(body?.error?.details) ? body.error.details : [])];
   error.reasons = candidates.map(item => item?.reason).filter(r => ['SERVICE_DISABLED','API_DISABLED','accessNotConfigured'].includes(r));
   return error;

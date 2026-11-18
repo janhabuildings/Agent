@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { normalizeMessage, validateAnswer } from './mail.js';
 import { readImapMessages, verifyImap, imapErrorMessage } from './imap.js';
+import { aiDiagnostics } from './ai-config.js';
 import { askFailure } from './ask-errors.js';
 import { isLatestEmailQuestion, latestEmailAnswer } from './latest.js';
 import { getConfig } from './config.js';
@@ -101,6 +102,20 @@ app.get('/api/auth/google/callback',async(req,res)=>{
 app.post('/api/disconnect',async(req,res)=>{
   if(req.session?.token) { try { await fetch('https://oauth2.googleapis.com/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:req.session.token}),signal:AbortSignal.timeout(10000)}); } catch {} }
   sessions.delete(req.sessionId); res.clearCookie('agent_session',{path:'/'}); res.json({ok:true});
+});
+app.post('/api/ai/check',async(req,res)=>{
+  const s=req.session;
+  if(!s || (!s.imap && (!s.token || Date.now()>s.tokenExpires))) return res.status(401).json({error:'Connect your email before testing AI.'});
+  if(s.pending) return res.status(429).json({error:'Please wait for the current request.'});
+  if(s.lastAiCheck && Date.now()-s.lastAiCheck<30000) return res.status(429).json({error:'Please wait 30 seconds before testing again.'});
+  const diagnostics=aiDiagnostics();
+  if(diagnostics.warning) return res.status(400).json({ok:false,...diagnostics,error:diagnostics.warning,code:'openai_key_format'});
+  s.lastAiCheck=Date.now();s.pending=true;
+  try {
+    await jsonFetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY.trim()}`,'Content-Type':'application/json'},body:JSON.stringify({model:diagnostics.model,max_completion_tokens:8,messages:[{role:'user',content:'Reply OK.'}]})});
+    res.json({ok:true,...diagnostics,message:'OpenAI accepted this key and model. No emails were sent in this test.'});
+  }catch(error){const failure=askFailure(error);res.status(failure.status).json({ok:false,...diagnostics,...failure,providerCode:error.providerCode||'unspecified',upstreamStatus:Number(error.status)||null});}
+  finally{s.pending=false;}
 });
 app.post('/api/ask',async(req,res)=>{
   const question=typeof req.body.question==='string'?req.body.question.trim():'';
