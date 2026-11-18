@@ -38,7 +38,7 @@ Set `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` in 
 
 ## Current limits and deployment
 
-Each question is independent; follow-up context is not yet supported. Search is generated from your question (or explicitly overridden), limited to 20 messages. Attachments are not processed. Answers can be incomplete or wrong; inspect the sources. Email contents are treated as untrusted model input, but this does not guarantee immunity to prompt injection.
+Each question is independent; follow-up context is not yet supported. Search is generated from your question (or explicitly overridden), limited to 20 messages. Supported attachment reading and downloading is described below. Answers can be incomplete or wrong; inspect the sources. Email contents are treated as untrusted model input, but this does not guarantee immunity to prompt injection.
 
 Tokens and session state are stored only in server memory, expire after at most eight hours, and are lost on restart. Google access tokens are not refreshed; reconnect when they expire. Session cookies are HttpOnly, SameSite=Lax, and Secure on HTTPS. Mutation requests validate their Origin. API responses are not cached. Disconnect attempts Google token revocation and always deletes the local session.
 
@@ -68,7 +68,7 @@ The app now supports Hostinger mailboxes such as `you@yourcompany.com`, without 
 
 The server connects only to `imap.hostinger.com:993` with verified TLS. Login checks the inbox; mailbox credentials stay only in the current server session in memory for at most eight hours. Credentials are not sent to OpenAI, written to application storage, or returned to the client. Disconnect, session expiration, or a server restart removes them. A restart during a request may interrupt an answer. IMAP itself uses your account's credentials, so those credentials can have broader capabilities than Agent; Agent opens the mailbox read-only and has no send/delete operations.
 
-Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase, or the most recent messages from the last 30 days for broad questions. Each answer reads at most 20 messages and 200 KB of raw source per message; long emails may be truncated. Source cards show an excerpt rather than a Gmail link. Attachments are not analyzed. Gmail search operators do not apply to Hostinger. Voice questions follow the same search limits. The host must permit outbound TLS connections on TCP port 993; a firewall or hosting restriction can prevent login. Sign-in attempts are limited to five per IP per 15 minutes.
+Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase, or the most recent messages from the last 30 days for broad questions. Each answer reads at most 20 messages and 200 KB of raw source per message; long emails may be truncated. Source cards show an excerpt rather than a Gmail link. Supported attachments can be read on demand (see below). Gmail search operators do not apply to Hostinger. Voice questions follow the same search limits. The host must permit outbound TLS connections on TCP port 993; a firewall or hosting restriction can prevent login. Sign-in attempts are limited to five per IP per 15 minutes.
 
 ### Latest email without AI
 
@@ -77,3 +77,16 @@ For Hostinger, simple requests such as **“What is my last email?”** or **“
 ### Diagnose the deployed AI connection
 
 After signing into email, open **Manage connection → Test AI connection**. This sends one tiny test prompt to the configured model and does not send email data. The result shows a fixed provider error code, upstream HTTP status, the deployment revision, and a SHA-256 key fingerprint. It never returns the key or raw provider messages. A changed fingerprint confirms a different key was loaded after redeployment. Checks are limited to one per session per 30 seconds. An API key's presence alone does not confirm it is valid or usable by the configured model.
+
+## Read and download email attachments
+
+1. Ask **“What is my last email?”** or **“Show attachments from my latest email.”** (Hostinger supports both without an AI request.)
+2. Click the **source email card** below the answer.
+3. In **Attachments**, use **Read text** to extract text or the **download icon** to save the original file.
+4. For an AI answer, ask **“Summarize the PDF attached to my latest email”** or ask a specific question about an attachment. Supporting email cards include the files.
+
+Both Hostinger and Gmail support session-scoped attachment downloads and text extraction. Hostinger looks in INBOX. Files are fetched on demand from your mailbox, not saved to disk. URLs expire with the session and cannot be used by another mailbox session. Original file downloads are served as binary attachments; files are not executed by Agent. Reading a file in the source panel does not send it to OpenAI. Asking about attachments sends extracted text to OpenAI for the answer.
+
+Supported reading formats: **text PDFs, DOCX, XLSX, TXT, CSV, MD, JSON, TSV and LOG**. Images and scanned PDFs do not have OCR support yet. Password-protected, damaged and unsupported files show an explicit message. Other file types can still be downloaded within the size limit.
+
+Limits: **10 MB per file**, first **20 PDF pages**, **2,000 spreadsheet rows / 50 columns**, and **20,000 extracted characters per file**. Automatic answers read at most **3 supported attachments / 40,000 extracted characters** per question. Hostinger's reported MIME size may include transfer encoding, so a file near the limit can be rejected conservatively. ZIP-based documents are checked for expanded size; readers run in bounded workers with a 20-second timeout. Truncation and read failures are disclosed to the answer model; inspect sources for completeness.

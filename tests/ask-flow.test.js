@@ -15,6 +15,14 @@ test('Hostinger latest-email request bypasses AI; AI rejection has a distinct sa
   const check=await fetch(base+'/api/ai/check',{method:'POST',headers:{Origin:base,Cookie:cookie}});const diagnostic=await check.json();assert.equal(diagnostic.providerCode,'invalid_api_key');assert.equal(diagnostic.upstreamStatus,401);assert.ok(!JSON.stringify(diagnostic).includes('sk-fake-test-key'));assert.equal((await fetch(base+'/api/ai/check',{method:'POST',headers:{Origin:base,Cookie:cookie}})).status,429);
   const ask=question=>fetch(base+'/api/ask',{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({question})});
   const latest=await ask('what is my last email?');assert.equal(latest.status,200);const result=await latest.json();assert.match(result.answer,/The review is on Thursday/);assert.equal(result.sources[0].subject,'Latest project note');
+  const file=result.sources[0].attachments[0];assert.equal(file.filename,'review.txt');
+  assert.equal((await fetch(`${base}/api/attachments/${file.id}/download`)).status,401);
+  const download=await fetch(`${base}/api/attachments/${file.id}/download`,{headers:{Cookie:cookie}});assert.equal(download.status,200);assert.match(download.headers.get('content-disposition'),/attachment/);assert.equal(download.headers.get('content-type'),'application/octet-stream');assert.equal(await download.text(),'Attachment deadline Friday');
+  const read=await fetch(`${base}/api/attachments/${file.id}/read`,{method:'POST',headers:{Cookie:cookie,Origin:base}});assert.equal(read.status,200);assert.equal((await read.json()).text,'Attachment deadline Friday');
+  assert.equal((await fetch(`${base}/api/attachments/not-a-valid-id/download`,{headers:{Cookie:cookie}})).status,404);
+  const otherLogin=await fetch(base+'/api/auth/imap',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:'other@example.com',password:'another-fake-password'})});
+  const otherCookie=otherLogin.headers.get('set-cookie').split(';')[0];assert.equal((await fetch(`${base}/api/attachments/${file.id}/download`,{headers:{Cookie:otherCookie}})).status,404);
+  const attachmentAnswer=await ask('Summarize the file attached to my latest email');assert.equal(attachmentAnswer.status,200);const grounded=await attachmentAnswer.json();assert.match(grounded.answer,/Friday/);assert.equal(grounded.sources[0].attachments[0].readStatus,'read');
   const analytical=await ask('What needs my attention this week?');assert.equal(analytical.status,502);const error=await analytical.json();assert.equal(error.code,'openai_auth_failed');assert.ok(!JSON.stringify(error).includes('private-provider-details'));assert.ok(!JSON.stringify(result).includes('fake-mailbox-password'));
  }finally{child.kill();await once(child,'exit');}
 });
