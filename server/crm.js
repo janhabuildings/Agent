@@ -34,7 +34,7 @@ export async function crmToken(connection,fetcher){
  if(!connection.refreshToken){const e=Error('CRM sign-in expired');e.status=401;throw e;}
  if(!connection.refreshing)connection.refreshing=(async()=>{
   const {data}=await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:connection.refreshToken}},fetcher);
-  if(!data?.access_token)throw Error('CRM refresh failed');connection.accessToken=data.access_token;connection.refreshToken=data.refresh_token;connection.expiresAt=Date.now()+Number(data.expires_in||3600)*1000;
+  if(!data?.access_token)throw Error('CRM refresh failed');connection.accessToken=data.access_token;connection.refreshToken=data.refresh_token;connection.expiresAt=Date.now()+Number(data.expires_in||3600)*1000;await connection.onRefresh?.();
  })().finally(()=>{delete connection.refreshing;});
  await connection.refreshing;return connection.accessToken;
 }

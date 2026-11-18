@@ -107,3 +107,9 @@ The checked-in `server/crm-public.json` contains the Lovable app's **public clie
 The password is used for sign-in and not retained by Agent. Access and refresh tokens live in the Agent server session only, for at most eight hours; tokens are refreshed when needed and never sent to OpenAI or the browser. Retrieved records are sent to OpenAI only when asking a CRM question. Restarting Render requires reconnecting. Sign-in is limited to five attempts per IP per 15 minutes.
 
 Each question searches **one collection, up to 50 records**, with a 45,000-character record budget. It is not a full-database report or a cross-collection join. Keyword matching and upcoming/overdue date filters are supported. Counts and absence statements are scoped to account-visible results; truncated results must not be described as complete. Follow-up questions are independent. Live account access must be verified after deployment; local tests use mocked CRM authentication and records.
+
+## Scheduled work
+
+Open **Schedules** in Agent. Write or speak a recurring task, preview the task/timing/sources, review the next run times and approve encrypted background access. You can edit, pause, run now, delete, refresh saved connections, and view/read aloud previous results. Results are delivered inside Agent; automatic sending and record edits are not supported.
+
+Durable scheduling requires a **persistent PostgreSQL database**, a stable **SCHEDULE_ENCRYPTION_KEY**, and a **separate worker/Cron Job**. The existing Free web service alone is not sufficient. Without those, the UI allows previews and clearly reports setup is needed; it does not claim schedules are running. See [scheduling setup](docs/scheduling.md) for concrete Render commands and the data lifecycle. Background resources may incur charges; no external resources are created automatically by this repository update.

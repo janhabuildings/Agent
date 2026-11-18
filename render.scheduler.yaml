@@ -1,0 +1,24 @@
+# Optional background service. Apply only after creating a persistent Postgres database.
+# Render Cron and the database may be billed. Review the plan in Render before creating.
+# Keep the existing web service; this template adds only the schedule runner.
+services:
+  - type: cron
+    name: agent-schedule-runner
+    runtime: node
+    plan: starter
+    repo: https://github.com/janhabuildings/Agent
+    branch: main
+    schedule: "* * * * *"
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run schedules:tick
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SCHEDULE_ENCRYPTION_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

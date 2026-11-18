@@ -11,3 +11,5 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: SCHEDULE_ENCRYPTION_KEY
+        generateValue: true
