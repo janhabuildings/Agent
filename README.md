@@ -90,3 +90,20 @@ Both Hostinger and Gmail support session-scoped attachment downloads and text ex
 Supported reading formats: **text PDFs, DOCX, XLSX, TXT, CSV, MD, JSON, TSV and LOG**. Images and scanned PDFs do not have OCR support yet. Password-protected, damaged and unsupported files show an explicit message. Other file types can still be downloaded within the size limit.
 
 Limits: **10 MB per file**, first **20 PDF pages**, **2,000 spreadsheet rows / 50 columns**, and **20,000 extracted characters per file**. Automatic answers read at most **3 supported attachments / 40,000 extracted characters** per question. Hostinger's reported MIME size may include transfer encoding, so a file near the limit can be rejected conservatively. ZIP-based documents are checked for expanded size; readers run in bounded workers with a 20-second timeout. Truncation and read failures are disclosed to the answer model; inspect sources for completeness.
+
+## Connect private JBI Platform CRM
+
+The **JBI CRM** source connects to `https://crm.jbius.com` through the same Supabase authentication and database permissions used by its Lovable app. The connector was mapped from `janhabuildings/jbi-engineering-architectural-services` at commit `b7aed5126ecd91974b6c0908381455d595dcd1a6`.
+
+1. Choose **JBI CRM** beside the question box (or in the sidebar).
+2. Click **Connect JBI CRM**, then enter your existing **JBI Platform email and password** in the app. This can be different from your Hostinger mailbox account. No new API key or Google setup is required.
+3. Ask a question such as **“What are my recent projects?”**, **“Which tasks have upcoming deadlines?”**, or **“Show my recent proposals.”**
+4. Click a source card to view the retrieved record and open it in JBI Platform. Use **Email** to return to your inbox. Both connections can coexist; disconnect them separately in Settings.
+
+Supported record collections: clients, projects, jobs, tasks, proposal metadata, and invoices. Queries use the signed-in user's access token and database row/column permissions. Invoice reading additionally requires the CRM's `is_admin` permission, matching its current admin-only policy. The connector never uses a service-role key, issues arbitrary SQL, or exposes mutation endpoints for CRM records. Only fixed field lists and validated search filters are available. Financial secrets, signing/view tokens, payroll/HR records, and CRM document-file contents are not selected.
+
+The checked-in `server/crm-public.json` contains the Lovable app's **public client URL and anon/publishable key**, not an administrative credential. User credentials are still required. If the backend changes, override with `CRM_SUPABASE_URL` and `CRM_SUPABASE_PUBLISHABLE_KEY` in Render; service-role keys are explicitly rejected. No CRM password belongs in Render configuration or source control.
+
+The password is used for sign-in and not retained by Agent. Access and refresh tokens live in the Agent server session only, for at most eight hours; tokens are refreshed when needed and never sent to OpenAI or the browser. Retrieved records are sent to OpenAI only when asking a CRM question. Restarting Render requires reconnecting. Sign-in is limited to five attempts per IP per 15 minutes.
+
+Each question searches **one collection, up to 50 records**, with a 45,000-character record budget. It is not a full-database report or a cross-collection join. Keyword matching and upcoming/overdue date filters are supported. Counts and absence statements are scoped to account-visible results; truncated results must not be described as complete. Follow-up questions are independent. Live account access must be verified after deployment; local tests use mocked CRM authentication and records.
