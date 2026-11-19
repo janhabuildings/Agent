@@ -24,5 +24,15 @@ test('Hostinger latest-email request bypasses AI; AI rejection has a distinct sa
   const otherCookie=otherLogin.headers.get('set-cookie').split(';')[0];assert.equal((await fetch(`${base}/api/attachments/${file.id}/download`,{headers:{Cookie:otherCookie}})).status,404);
   const attachmentAnswer=await ask('Summarize the file attached to my latest email');assert.equal(attachmentAnswer.status,200);const grounded=await attachmentAnswer.json();assert.match(grounded.answer,/Friday/);assert.equal(grounded.sources[0].attachments[0].readStatus,'read');
   const analytical=await ask('What needs my attention this week?');assert.equal(analytical.status,502);const error=await analytical.json();assert.equal(error.code,'openai_auth_failed');assert.ok(!JSON.stringify(error).includes('private-provider-details'));assert.ok(!JSON.stringify(result).includes('fake-mailbox-password'));
+
+  const added=await fetch(base+'/api/auth/imap',{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({email:'second@example.com',password:'second-fake-password'})});assert.equal(added.status,200);
+  const multiCookie=added.headers.get('set-cookie').split(';')[0];const headers={Origin:base,Cookie:multiCookie,'Content-Type':'application/json'};
+  const status=await (await fetch(base+'/api/status',{headers})).json();assert.equal(status.mailboxes.length,2);assert.ok(!JSON.stringify(status).includes('password'));
+  const switched=await fetch(base+'/api/mailboxes/select',{method:'POST',headers,body:JSON.stringify({selection:'all'})});assert.equal(switched.status,200);
+  assert.equal((await fetch(`${base}/api/attachments/${file.id}/download`,{headers})).status,200);
+  assert.equal((await fetch(base+'/api/mailboxes/select',{method:'POST',headers,body:JSON.stringify({selection:'foreign'})})).status,400);
+  const original=status.mailboxes.find(a=>a.email==='test@example.com');assert.equal((await fetch(base+'/api/mailboxes/'+original.id,{method:'DELETE',headers})).status,200);
+  assert.equal((await fetch(`${base}/api/attachments/${file.id}/download`,{headers})).status,404);
+  const remaining=await (await fetch(base+'/api/status',{headers})).json();assert.equal(remaining.mailboxes.length,1);assert.equal(remaining.email,'second@example.com');
  }finally{child.kill();await once(child,'exit');}
 });

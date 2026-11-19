@@ -16,3 +16,5 @@
 .sidebar{top:0;left:0}
 
 .depth-controls{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:0 0 10px}.depth-switch{display:flex;gap:4px}.depth-switch button{border:1px solid #dce3d0;background:transparent;border-radius:6px;padding:6px 11px;font-size:10px;color:#89967c}.depth-switch button.selected{background:#e5edd9;color:#3b593b}.depth-controls small{font-size:9px;color:#8b967f;line-height:1.6}@media(max-width:760px){.depth-controls{align-items:flex-start}.depth-controls small{font-size:8px;max-width:165px;text-align:right}}
+
+.mailbox-selector{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.mailbox-selector select{max-width:100%;padding:10px;border:1px solid #dce2d1;border-radius:8px;background:#fff;color:#293d35}.mailbox-row{padding:12px 0;border-bottom:1px solid #dce2d1;overflow-wrap:anywhere}.mailbox-row .secondary{margin-top:8px}

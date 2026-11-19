@@ -11,7 +11,7 @@ export function normalizeMessage(message) {
   const headers = message.payload?.headers || [];
   const get = name => headers.find(h => h.name.toLowerCase() === name)?.value || '';
   const rawBody=decodeBody(message.payload)||message.snippet||'';
-  return { id: message.id, attachments:gmailAttachments(message.payload,message.id), subject: get('subject') || '(No subject)', from: get('from'), date: get('date'), body: rawBody.slice(0,RETRIEVAL_LIMITS.emailBodyCharacters), bodyTruncated:rawBody.length>RETRIEVAL_LIMITS.emailBodyCharacters, url: `https://mail.google.com/mail/u/0/#all/${message.id}` };
+  return { id: message.id, attachments:gmailAttachments(message.payload,message.id), subject: get('subject') || '(No subject)', from: get('from'), date: get('date'), receivedAt:message.internalDate?new Date(Number(message.internalDate)).toISOString():get('date'), body: rawBody.slice(0,RETRIEVAL_LIMITS.emailBodyCharacters), bodyTruncated:rawBody.length>RETRIEVAL_LIMITS.emailBodyCharacters, url: `https://mail.google.com/mail/u/0/#all/${message.id}` };
 }
 export function validateAnswer(answer, messages) {
   if (typeof answer?.answer !== 'string' || !Array.isArray(answer.sourceIds)) throw new Error('Invalid answer from model');

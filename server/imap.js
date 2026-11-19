@@ -29,10 +29,10 @@ export async function readImapMessages(credentials, query, createClient, {latest
     const selected=uids.sort((a,b)=>a-b).slice(latestOnly?-1:-limit).reverse();
     const messages=[];
     // PEEK source fetches and EXAMINE read-only mode preserve unread flags.
-    for await (const message of client.fetch(selected.join(','),{uid:true,bodyStructure:true,source:{start:0,maxLength:200000}},{uid:true})) {
+    for await (const message of client.fetch(selected.join(','),{uid:true,bodyStructure:true,internalDate:true,source:{start:0,maxLength:200000}},{uid:true})) {
       const mail=await simpleParser(message.source,{skipHtmlToText:false,skipTextToHtml:true,skipImageLinks:true});
       const body=(mail.text||'').slice(0,RETRIEVAL_LIMITS.emailBodyCharacters);
-      messages.push({id:`imap-${message.uid}`,subject:mail.subject||'(No subject)',from:mail.from?.text||'',date:mail.date?.toISOString()||'',body,bodyTruncated:(mail.text||'').length>body.length,excerpt:body.slice(0,1200),attachments:imapAttachments(message.bodyStructure,message.uid,client.mailbox?.uidValidity)});
+      messages.push({id:`imap-${message.uid}`,subject:mail.subject||'(No subject)',from:mail.from?.text||'',date:mail.date?.toISOString()||'',receivedAt:message.internalDate?new Date(message.internalDate).toISOString():mail.date?.toISOString()||'',body,bodyTruncated:(mail.text||'').length>body.length,excerpt:body.slice(0,1200),attachments:imapAttachments(message.bodyStructure,message.uid,client.mailbox?.uidValidity)});
     }
     return withRetrieval(messages.sort((a,b)=>Number(b.id.slice(5))-Number(a.id.slice(5))),{totalMatches:uids.length,limit:latestOnly?1:limit,limited:uids.length>selected.length});
   },createClient);

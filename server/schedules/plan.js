@@ -1,3 +1,4 @@
+import {mailboxes} from '../mailboxes.js';
 import {RETRIEVAL_LIMITS} from '../retrieval.js';
 import {CronExpressionParser} from 'cron-parser';
 export function validateSchedule(input,now=new Date()){
@@ -13,15 +14,16 @@ export function validateSchedule(input,now=new Date()){
  let expression;try{expression=CronExpressionParser.parse(cron,{currentDate:now,tz:timezone});}catch{throw Error('The timing is invalid. Edit the schedule and try again.');}
  const next=[];for(let i=0;i<8;i++)next.push(expression.next().toDate());
  for(let i=1;i<next.length;i++)if(next[i]-next[i-1]<15*60000)throw Error('Schedules can run at most once every 15 minutes.');
- return {title,instructions,cron,timezone,sources,timingSummary:describeTiming(cron),delivery:'in_app',action:'read_report',nextRuns:next.slice(0,3).map(date=>date.toISOString())};
+ return {...(typeof input.emailAddress==='string'?{emailAddress:input.emailAddress}:{}),title,instructions,cron,timezone,sources,timingSummary:describeTiming(cron),delivery:'in_app',action:'read_report',nextRuns:next.slice(0,3).map(date=>date.toISOString())};
 }
 export function nextRun(plan,after=new Date()){return CronExpressionParser.parse(plan.cron,{currentDate:after,tz:plan.timezone}).next().toDate();}
 export function availableSources(session){const result=[];if(session?.imap||(session?.token&&Date.now()<session.tokenExpires))result.push('email');if(session?.crm)result.push('crm');return result;}
-export function sessionIdentities(session){return [...(session?.crm?.userId?['crm:'+session.crm.userId]:[]),...(session?.email&&(session?.imap||session?.token)?['email:'+session.email.toLowerCase()]:[])];}
+export function sessionIdentities(session){return [...(session?.crm?.userId?['crm:'+session.crm.userId]:[]),...mailboxes(session).map(a=>'email:'+a.email.toLowerCase())];}
 export function connectionsForPlan(session,plan){
  const connections={};
  for(const source of plan.sources){
   if(source==='email'){
+   if(plan.emailAddress&&plan.emailAddress!==session.email)throw Error('Select the inbox '+plan.emailAddress+' before refreshing this schedule.');
    if(session?.imap)connections.email={provider:'imap',email:session.email,imap:{...session.imap}};
    else if(session?.token&&session?.googleRefreshToken)connections.email={provider:'gmail',email:session.email,token:session.token,tokenExpires:session.tokenExpires,refreshToken:session.googleRefreshToken};
    else throw Error('Connect your email first. For Gmail, reconnect once to permit background access.');

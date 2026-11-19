@@ -71,11 +71,11 @@ export class ScheduleStore{
    finally{delete connections.crm.onRefresh;delete connections.crm.refreshing;await client.query('UPDATE agent_schedule_connections SET payload=$2,version=version+1 WHERE owner_id=$1 AND version=$3',[owner,seal(connections,this.key,`${owner}:connections`),version]);}
   }finally{if(locked)await client.query('SELECT pg_advisory_unlock(hashtext($1),178904)',[owner]);client.release();}
  }
- async revoke(session,source){
+ async revoke(session,source,emailAddress){
   if(!sessionIdentities(session).length)return;
   await this.init();const owners=this.owners(session);const client=await this.pool.connect();
   try{await client.query('BEGIN');for(const owner of owners){
-   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[owner]);const vault=await client.query('SELECT * FROM agent_schedule_connections WHERE owner_id=$1 FOR UPDATE',[owner]);if(!vault.rows[0])continue;const connections=unseal(vault.rows[0].payload,this.key,`${owner}:connections`);delete connections[source];
+   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[owner]);const vault=await client.query('SELECT * FROM agent_schedule_connections WHERE owner_id=$1 FOR UPDATE',[owner]);if(!vault.rows[0])continue;const connections=unseal(vault.rows[0].payload,this.key,`${owner}:connections`);if(source==='email'&&emailAddress&&connections.email?.email?.toLowerCase()!==emailAddress.toLowerCase())continue;delete connections[source];
    if(Object.keys(connections).length)await client.query('UPDATE agent_schedule_connections SET payload=$2,version=version+1 WHERE owner_id=$1',[owner,seal(connections,this.key,`${owner}:connections`)]);else await client.query('DELETE FROM agent_schedule_connections WHERE owner_id=$1',[owner]);
    const rows=await client.query('SELECT * FROM agent_schedules WHERE owner_id=$1',[owner]);for(const row of rows.rows)if(this.decrypt(row).sources.includes(source))await client.query('UPDATE agent_schedules SET enabled=false,run_requested=false WHERE id=$1',[row.id]);
   }await client.query('COMMIT');}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}

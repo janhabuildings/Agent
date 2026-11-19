@@ -13,7 +13,7 @@ globalThis.fetch=async (url,options)=>{
   if(content?.emails?.[0]?.attachmentText){
    if(content.emails[0].attachmentText[0].text!=='Attachment deadline Friday')throw Error('Expected extracted attachment text');
    if(JSON.stringify(content).includes('fake-mailbox-password'))throw Error('Credential leaked');
-   return Response.json({choices:[{message:{content:JSON.stringify({answer:'Deadline Friday from review.txt.',sourceIds:['imap-1']})}}]});
+   return Response.json({choices:[{message:{content:JSON.stringify({answer:'Deadline Friday from review.txt.',sourceIds:[content.emails[0].id]})}}]});
   }
  }
  if(url==='https://api.openai.com/v1/chat/completions')return Response.json({error:{code:'invalid_api_key',message:'private-provider-details'}},{status:401});
