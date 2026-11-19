@@ -18,8 +18,8 @@ export function registerAttachments(session,messages){
  session.attachments ||= new Map();
  for(const message of messages){
   message.attachments=(message.attachments||[]).slice(0,30).map(attachment=>{
-   const id=randomBytes(16).toString('hex');session.attachments.set(id,attachment);
-   while(session.attachments.size>300)session.attachments.delete(session.attachments.keys().next().value);
+   const id=randomBytes(16).toString('hex');const stored={...attachment};delete stored.inlineData;session.attachments.set(id,stored);
+   while(session.attachments.size>5000)session.attachments.delete(session.attachments.keys().next().value);
    return {id,filename:attachment.filename,mimeType:attachment.mimeType,size:attachment.size};
   });
  }

@@ -1,3 +1,4 @@
+import {RETRIEVAL_LIMITS} from './retrieval.js';
 import {readFileSync} from 'node:fs';
 const defaults=JSON.parse(readFileSync(new URL('./crm-public.json',import.meta.url),'utf8'));
 export function crmConfig(env=process.env){
@@ -44,19 +45,28 @@ export function safeCrmPlan(plan){
  const search=typeof plan?.search==='string'?plan.search.replace(/[^\p{L}\p{N}\s.-]/gu,' ').trim().replace(/\s+/g,' ').slice(0,80):'';
  return {table,search,dateMode:['upcoming','overdue'].includes(plan?.dateMode)?plan.dateMode:'all'};
 }
-export async function readCrm(connection,plan,fetcher){
+export async function readCrm(connection,plan,fetcher,{limit=RETRIEVAL_LIMITS.crmRecords,contextBudget=RETRIEVAL_LIMITS.crmContextCharacters}={}){
+ limit=Math.max(1,Math.min(RETRIEVAL_LIMITS.crmRecords,Math.floor(limit)||RETRIEVAL_LIMITS.crmRecords));
+ contextBudget=Math.max(1000,Math.min(RETRIEVAL_LIMITS.crmContextCharacters,contextBudget));
  const {table,search,dateMode}=safeCrmPlan(plan);const schema=CRM_TABLES[table];const token=await crmToken(connection,fetcher);
  if(schema.admin){const {data}=await request('/rest/v1/rpc/is_admin',{method:'POST',token,body:{_user_id:connection.userId}},fetcher);if(data!==true){const error=Error('Invoice access requires CRM administrator permission');error.status=403;throw error;}}
- const query=new URLSearchParams({select:schema.fields,order:schema.order,limit:'50'});
+ const query=new URLSearchParams({select:schema.fields,order:schema.order+',id.asc',limit:String(RETRIEVAL_LIMITS.crmPageSize)});
  if(['job_tasks','invoices'].includes(table)&&dateMode!=='all'){const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());query.set('due_date',`${dateMode==='upcoming'?'gte':'lt'}.${today}`);}
  if(search)query.set('or',`(${schema.search.map(field=>`${field}.ilike.*${search}*`).join(',')})`);
- const {data,response}=await request(`/rest/v1/${table}?${query}`,{token,prefer:'count=exact'},fetcher);
- if(!Array.isArray(data))throw Error('Invalid CRM records');
- const totalString=response.headers.get('content-range')?.split('/')[1];const total=totalString&&totalString!=='*'?Number(totalString):null;
- let budget=45000;
+ const data=[];const ids=new Set();let total=null,offset=0,pages=0,hasMore=false;
+ while(data.length<limit && pages++<10){
+  query.set('offset',String(offset));query.set('limit',String(Math.min(RETRIEVAL_LIMITS.crmPageSize,limit-data.length)));
+  const page=await request(`/rest/v1/${table}?${query}`,{token,prefer:'count=exact'},fetcher);
+  if(!Array.isArray(page.data))throw Error('Invalid CRM records');
+  const count=page.response.headers.get('content-range')?.split('/')[1];if(count&&count!=='*'&&Number.isFinite(Number(count)))total=Number(count);
+  let added=0;for(const row of page.data)if(!ids.has(row.id)){ids.add(row.id);data.push(row);added++;if(data.length>=limit)break;}
+  offset+=page.data.length;hasMore=total===null?page.data.length>=Number(query.get('limit')):offset<total;
+  if(!page.data.length||!added||!hasMore)break;
+ }
+ let budget=contextBudget;
  const records=[];for(const raw of data){const row={};for(const [key,value] of Object.entries(raw))row[key]=typeof value==='string'?value.slice(0,3000):value;const size=JSON.stringify(row).length;if(size>budget)break;budget-=size;records.push({id:`crm-${table}-${row.id}`,record:row});}
  const sources=records.map(({id,record})=>({id,kind:'crm',subject:record.title||record.address||record.name||record.number||schema.label,from:`JBI CRM · ${schema.label}`,date:record.updated_at||'',url:`https://crm.jbius.com/${schema.path}${table==='job_tasks'?(record.job_items?.job_id?'/'+record.job_items.job_id:''):'/'+record.id}`,excerpt:JSON.stringify(record,null,2)}));
- return {table,label:schema.label,search,records,sources,total,limited:total===null||total>records.length};
+ return {table,label:schema.label,search,records,sources,total,retrieved:data.length,limited:total===null||total>records.length||hasMore,characterLimited:records.length<data.length};
 }
 export function crmError(error){
  if(error.status===400||error.status===401)return {status:401,error:'JBI Platform sign-in failed or expired. Check your CRM email and password and reconnect.'};

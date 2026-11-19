@@ -15,6 +15,7 @@ globalThis.fetch=async(url,options)=>{
    if(payload.messages.at(-1).content.includes('private-crm-'))throw Error('CRM token leaked');
    return Response.json({choices:[{message:{content:JSON.stringify({answer:'The Main Street alteration project is active.',sourceIds:['crm-projects-project-1','invented']})}}]});
   }
+  if(payload.messages[0].content.includes('Choose exactly one table:')&&payload.messages.at(-1).content==='What are my recent projects?')throw Error('A simple recent-project request must bypass AI planning');
   if(payload.messages[0].content.includes('Choose exactly one table:'))return Response.json({choices:[{message:{content:'{"table":"projects","search":""}'}}]});
  }
  return previousFetch(url,options);

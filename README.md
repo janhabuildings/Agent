@@ -19,7 +19,7 @@ Open http://localhost:5173. The API runs on port 3001. Demo mode works without c
 1. Create a Google Cloud project, enable the Gmail API, and configure the OAuth consent screen. During testing, add your Gmail account as a test user.
 2. Create a **Web application** OAuth client with redirect URI `http://localhost:3001/api/auth/google/callback`.
 3. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and OPENAI_API_KEY in the private `.env` file. Never commit credentials. Restart the server.
-4. Click Connect Gmail, review the read-only permission, and authorize. Live answers send up to 20 matching emails to OpenAI when you ask. Agent translates each question into a Gmail search and shows the search used. You can override it under Settings with Gmail search syntax.
+4. Click Connect Gmail, review the read-only permission, and authorize. Live answers can read up to 25 matching emails in Quick mode or 100 in Thorough mode; selected text is sent to OpenAI when you ask. Agent translates each question into a Gmail search and shows the search used. You can override it under Settings with Gmail search syntax.
 
 Gmail's restricted read-only scope may require Google verification before public distribution. Browser speech recognition uses the browser/device's speech service and may require HTTPS and microphone permission. Typed input is always available. Spoken replies are opt-in.
 
@@ -38,7 +38,7 @@ Set `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` in 
 
 ## Current limits and deployment
 
-Each question is independent; follow-up context is not yet supported. Search is generated from your question (or explicitly overridden), limited to 20 messages. Supported attachment reading and downloading is described below. Answers can be incomplete or wrong; inspect the sources. Email contents are treated as untrusted model input, but this does not guarantee immunity to prompt injection.
+Each question is independent; follow-up context is not yet supported. Search is generated from your question (or explicitly overridden), limited to 25 messages in Quick mode or 100 in Thorough mode, with bounded text per answer. Supported attachment reading and downloading is described below. Answers can be incomplete or wrong; inspect the sources. Email contents are treated as untrusted model input, but this does not guarantee immunity to prompt injection.
 
 Tokens and session state are stored only in server memory, expire after at most eight hours, and are lost on restart. Google access tokens are not refreshed; reconnect when they expire. Session cookies are HttpOnly, SameSite=Lax, and Secure on HTTPS. Mutation requests validate their Origin. API responses are not cached. Disconnect attempts Google token revocation and always deletes the local session.
 
@@ -68,7 +68,7 @@ The app now supports Hostinger mailboxes such as `you@yourcompany.com`, without 
 
 The server connects only to `imap.hostinger.com:993` with verified TLS. Login checks the inbox; mailbox credentials stay only in the current server session in memory for at most eight hours. Credentials are not sent to OpenAI, written to application storage, or returned to the client. Disconnect, session expiration, or a server restart removes them. A restart during a request may interrupt an answer. IMAP itself uses your account's credentials, so those credentials can have broader capabilities than Agent; Agent opens the mailbox read-only and has no send/delete operations.
 
-Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase, or the most recent messages from the last 30 days for broad questions. Each answer reads at most 20 messages and 200 KB of raw source per message; long emails may be truncated. Source cards show an excerpt rather than a Gmail link. Supported attachments can be read on demand (see below). Gmail search operators do not apply to Hostinger. Voice questions follow the same search limits. The host must permit outbound TLS connections on TCP port 993; a firewall or hosting restriction can prevent login. Sign-in attempts are limited to five per IP per 15 minutes.
+Hostinger search covers **INBOX only**. Automatic search uses one keyword/phrase, or the most recent messages from the last 30 days for broad questions. Each answer reads at most 25 messages in Quick mode or 100 in Thorough mode, and 200 KB of raw source per message; long emails may be truncated. Source cards show an excerpt rather than a Gmail link. Supported attachments can be read on demand (see below). Gmail search operators do not apply to Hostinger. Voice questions follow the same search limits. The host must permit outbound TLS connections on TCP port 993; a firewall or hosting restriction can prevent login. Sign-in attempts are limited to five per IP per 15 minutes.
 
 ### Latest email without AI
 
@@ -106,10 +106,16 @@ The checked-in `server/crm-public.json` contains the Lovable app's **public clie
 
 The password is used for sign-in and not retained by Agent. Access and refresh tokens live in the Agent server session only, for at most eight hours; tokens are refreshed when needed and never sent to OpenAI or the browser. Retrieved records are sent to OpenAI only when asking a CRM question. Restarting Render requires reconnecting. Sign-in is limited to five attempts per IP per 15 minutes.
 
-Each question searches **one collection, up to 50 records**, with a 45,000-character record budget. It is not a full-database report or a cross-collection join. Keyword matching and upcoming/overdue date filters are supported. Counts and absence statements are scoped to account-visible results; truncated results must not be described as complete. Follow-up questions are independent. Live account access must be verified after deployment; local tests use mocked CRM authentication and records.
+Each question searches **one collection: up to 100 records in Quick mode or 500 in Thorough mode**, with respective 75,000/200,000-character record budgets. It is not a full-database report or a cross-collection join. Keyword matching and upcoming/overdue date filters are supported. Counts and absence statements are scoped to account-visible results; truncated results must not be described as complete. Follow-up questions are independent. Live account access must be verified after deployment; local tests use mocked CRM authentication and records.
 
 ## Scheduled work
 
 Open **Schedules** in Agent. Write or speak a recurring task, preview the task/timing/sources, review the next run times and approve encrypted background access. You can edit, pause, run now, delete, refresh saved connections, and view/read aloud previous results. Results are delivered inside Agent; automatic sending and record edits are not supported.
 
 Durable scheduling requires a **persistent PostgreSQL database**, a stable **SCHEDULE_ENCRYPTION_KEY**, and a **separate worker/Cron Job**. The existing Free web service alone is not sufficient. Without those, the UI allows previews and clearly reports setup is needed; it does not claim schedules are running. See [scheduling setup](docs/scheduling.md) for concrete Render commands and the data lifecycle. Background resources may incur charges; no external resources are created automatically by this repository update.
+
+## Response speed and search depth
+
+**Quick** is the default for live chat: up to 25 matching emails or 100 CRM records. **Thorough** raises that to 100 emails or 500 CRM records. Choose beside the question box. Larger searches can increase processing time and API token usage. Common broad requests (recent projects, upcoming task deadlines, inbox summaries) use deterministic retrieval plans and skip one AI call; requests with names/addresses or more complex filters still use AI planning. Retrieved text is always fetched afresh, subject to the existing permissions.
+
+Gmail pages results and fetches message details with at most five simultaneous requests. CRM paginates in batches of up to 100 with stable ID tie-breaking and deduplication. Long email bodies share a total text budget fairly so later messages are not silently excluded from model context. Coverage metadata and the chat show incomplete retrieval or text truncation. This is still bounded retrieval, not a complete mailbox/database index. Scheduled reports use the Thorough caps; attachment limits are unchanged.

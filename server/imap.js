@@ -1,3 +1,4 @@
+import { RETRIEVAL_LIMITS,withRetrieval } from './retrieval.js';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { imapAttachments, MAX_ATTACHMENT_BYTES } from './attachments.js';
@@ -20,19 +21,20 @@ export async function verifyImap(credentials, createClient) {
 export function imapCriteria(query, now=new Date()) {
   return query ? {text:query} : {since:new Date(now.getTime()-30*24*60*60*1000)};
 }
-export async function readImapMessages(credentials, query, createClient, {latestOnly=false}={}) {
+export async function readImapMessages(credentials, query, createClient, {latestOnly=false,limit=RETRIEVAL_LIMITS.emailMessages}={}) {
   return withInbox(credentials,async client=>{
     const uids=await client.search(latestOnly?{all:true}:imapCriteria(query),{uid:true});
-    if(!Array.isArray(uids)||!uids.length)return [];
-    const selected=uids.sort((a,b)=>a-b).slice(latestOnly?-1:-20).reverse();
+    if(!Array.isArray(uids)||!uids.length)return withRetrieval([],{totalMatches:0,limited:false});
+    limit=Math.max(1,Math.min(RETRIEVAL_LIMITS.emailMessages,Math.floor(limit)||RETRIEVAL_LIMITS.emailMessages));
+    const selected=uids.sort((a,b)=>a-b).slice(latestOnly?-1:-limit).reverse();
     const messages=[];
     // PEEK source fetches and EXAMINE read-only mode preserve unread flags.
     for await (const message of client.fetch(selected.join(','),{uid:true,bodyStructure:true,source:{start:0,maxLength:200000}},{uid:true})) {
       const mail=await simpleParser(message.source,{skipHtmlToText:false,skipTextToHtml:true,skipImageLinks:true});
-      const body=(mail.text||'').slice(0,10000);
-      messages.push({id:`imap-${message.uid}`,subject:mail.subject||'(No subject)',from:mail.from?.text||'',date:mail.date?.toISOString()||'',body,excerpt:body.slice(0,1200),attachments:imapAttachments(message.bodyStructure,message.uid,client.mailbox?.uidValidity)});
+      const body=(mail.text||'').slice(0,RETRIEVAL_LIMITS.emailBodyCharacters);
+      messages.push({id:`imap-${message.uid}`,subject:mail.subject||'(No subject)',from:mail.from?.text||'',date:mail.date?.toISOString()||'',body,bodyTruncated:(mail.text||'').length>body.length,excerpt:body.slice(0,1200),attachments:imapAttachments(message.bodyStructure,message.uid,client.mailbox?.uidValidity)});
     }
-    return messages.sort((a,b)=>Number(b.id.slice(5))-Number(a.id.slice(5)));
+    return withRetrieval(messages.sort((a,b)=>Number(b.id.slice(5))-Number(a.id.slice(5))),{totalMatches:uids.length,limit:latestOnly?1:limit,limited:uids.length>selected.length});
   },createClient);
 }
 export function imapErrorMessage(error) {
